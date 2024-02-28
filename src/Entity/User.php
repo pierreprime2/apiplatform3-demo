@@ -2,6 +2,10 @@
 
 namespace App\Entity;
 
+use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\Link;
+use ApiPlatform\Serializer\Filter\PropertyFilter;
 use App\Repository\UserRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -13,11 +17,19 @@ use ApiPlatform\Metadata\ApiResource;
 use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 
+#[ApiFilter(PropertyFilter::class)]
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: '`user`')]
 #[ApiResource(
+    uriTemplate: '/treasures/{treasure_id}/owner.{_format}',
+    operations: [new Get()],
+    uriVariables: [
+        'treasure_id' => new Link(
+            fromProperty: 'owner',
+            fromClass: DragonTreasure::class,
+        ),
+    ],
     normalizationContext: ['groups' => ['user:read']],
-    denormalizationContext: ['groups' => ['user:write']],
 )]
 #[UniqueEntity(fields: ['email'], message: 'There is already an account with this email')]
 #[UniqueEntity(fields: ['username'], message: 'It looks like another dragon took your username. ROAR!')]
@@ -45,11 +57,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?string $password = null;
 
     #[ORM\Column(length: 255, unique: true)]
-    #[Groups(['user:read', 'user:write'])]
+    #[Groups(['user:read', 'user:write', 'treasure:item:get', 'treasure:write'])]
     #[Assert\NotBlank]
     private ?string $username = null;
 
-    #[ORM\OneToMany(targetEntity: DragonTreasure::class, mappedBy: 'owner')]
+    #[ORM\OneToMany(targetEntity: DragonTreasure::class, mappedBy: 'owner', cascade: ['persist'], orphanRemoval: true)]
+    #[Groups(['user:read', 'user:write'])]
+    #[Assert\Valid]
     private Collection $dragonTreasures;
 
     public function __construct()
@@ -132,7 +146,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->username;
     }
 
-    public function setUsername(string $username): static
+    public function setUsername(string $username): self
     {
         $this->username = $username;
 
@@ -147,7 +161,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->dragonTreasures;
     }
 
-    public function addDragonTreasure(DragonTreasure $dragonTreasure): static
+    public function addDragonTreasure(DragonTreasure $dragonTreasure): self
     {
         if (!$this->dragonTreasures->contains($dragonTreasure)) {
             $this->dragonTreasures->add($dragonTreasure);
@@ -157,7 +171,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    public function removeDragonTreasure(DragonTreasure $dragonTreasure): static
+    public function removeDragonTreasure(DragonTreasure $dragonTreasure): self
     {
         if ($this->dragonTreasures->removeElement($dragonTreasure)) {
             // set the owning side to null (unless already changed)
